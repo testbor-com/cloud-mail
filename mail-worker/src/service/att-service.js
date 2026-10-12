@@ -329,7 +329,7 @@ const attService = {
 			try {
 				await this.batchDelete(c, delKeyList);
 			} catch (e) {
-				console.error('删除附件文件失败：', e);
+				console.error('Failed to delete attachment file: ', e);
 			}
 		}
 

@@ -241,9 +241,9 @@
       <div class="details">
         <div v-if="userDetails.platform || userDetails.username" class="oauth-details">
           <el-avatar :src="userDetails.avatar" :size="30" class="oauth-avatar"/>
-          <span>{{ $t('username') }}：{{ userDetails.username }}</span>
+          <span>{{ $t('username') }}:{{ userDetails.username }}</span>
           <span v-if="userDetails.trustLevel != null">
-            {{ $t('trustLevel') }}：<el-tag type="success">{{ userDetails.trustLevel }}</el-tag>
+            {{ $t('trustLevel') }}:<el-tag type="success">{{ userDetails.trustLevel }}</el-tag>
           </span>
         </div>
         <div v-if="!sendNumShow"><span

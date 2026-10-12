@@ -189,7 +189,7 @@ export async function email(message, env, ctx) {
 				try {
 					await message.forward(email);
 				} catch (e) {
-					console.error(`转发邮箱 ${email} 失败：`, e);
+					console.error(`Failed to forward email to ${email}: `, e);
 				}
 
 			}));
@@ -202,7 +202,7 @@ export async function email(message, env, ctx) {
 		}
 
 	} catch (e) {
-		console.error('邮件接收异常: ', e);
+		console.error('Email reception error: ', e);
 		throw e
 	}
 }

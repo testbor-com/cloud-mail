@@ -28,23 +28,23 @@ export default function emailMsgTemplate(email, tgMsgTo, tgMsgFrom, tgMsgText) {
 		if (tgMsgFrom === 'only-name') {
 			template += `
 
-From\u200B：${escapeHtml(email.name || '')}`
+From\u200B:${escapeHtml(email.name || '')}`
 		}
 
 		if (tgMsgFrom === 'show') {
 			template += `
 
-From\u200B：${escapeHtml(email.name || '')}  &lt;${escapeHtml(email.sendEmail || '')}&gt;`
+From\u200B:${escapeHtml(email.name || '')}  &lt;${escapeHtml(email.sendEmail || '')}&gt;`
 		}
 
 		if(tgMsgTo === 'show' && tgMsgFrom === 'hide') {
 			template += `
 
-To：\u200B${escapeHtml(email.toEmail || '')}`
+To:\u200B${escapeHtml(email.toEmail || '')}`
 
 		} else if(tgMsgTo === 'show') {
 		template += `
-To：\u200B${escapeHtml(email.toEmail || '')}`
+To:\u200B${escapeHtml(email.toEmail || '')}`
 	}
 
 	const text = escapeHtml(emailUtils.formatText(email.text) || emailUtils.htmlToText(email.content));

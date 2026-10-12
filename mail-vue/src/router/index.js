@@ -153,12 +153,12 @@ function loadBackground(next) {
         };
 
         img.onerror = () => {
-            console.warn("背景图片加载失败:", img.src);
+            console.warn("Failed to load background image:", img.src);
             next()
         };
 
         setTimeout(() => {
-            console.warn("背景加载超时，已放行");
+            console.warn("Background load timed out; continuing");
             next()
         }, 3000)
 
