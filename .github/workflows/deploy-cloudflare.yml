@@ -119,7 +119,6 @@ jobs:
           sed -i "s|\${CUSTOM_DOMAIN}|${CUSTOM_DOMAIN}|g" "$CONFIG_FILE"
           sed -i "s|\"\${DOMAIN}\"|${DOMAIN}|g" "$CONFIG_FILE"
           sed -i "s|\${ADMIN}|${ADMIN}|g" "$CONFIG_FILE"
-          sed -i "s|\${JWT_SECRET}|${JWT_SECRET}|g" "$CONFIG_FILE"
           sed -i "s|\${R2_BUCKET_NAME}|${R2_BUCKET_NAME}|g" "$CONFIG_FILE"
           sed -i "s|\${PROJECT_LINK}|${PROJECT_LINK}|g" "$CONFIG_FILE"
           sed -i "s|\${ANALYSIS_CACHE}|${ANALYSIS_CACHE}|g" "$CONFIG_FILE"
@@ -210,17 +209,14 @@ jobs:
         id: deploy
         working-directory: ./mail-worker
         run: |
+          set -o pipefail
           echo "🚀 Starting deployment..."
-          pnpm wrangler deploy -c wrangler-action.toml 2>&1 \
+          printf '%s' "$JWT_SECRET" | jq -Rs '{jwt_secret: .}' > "$RUNNER_TEMP/cloud-mail-secrets.json"
+          chmod 600 "$RUNNER_TEMP/cloud-mail-secrets.json"
+          pnpm wrangler deploy -c wrangler-action.toml --secrets-file "$RUNNER_TEMP/cloud-mail-secrets.json" 2>&1 \
             | tee deploy.log \
             | grep -v "https://.*\.workers\.dev" \
-            | sed -E 's/env\.domain .*/env.domain (***)/' \
-            || true
-          
-          DEPLOY_EXIT_CODE=${PIPESTATUS[0]}
-          if [ $DEPLOY_EXIT_CODE -ne 0 ]; then
-            exit 1
-          fi
+            | sed -E 's/env\.domain .*/env.domain (***)/'
           
           WORKER_URL=$(grep -o "https://.*\.workers\.dev" deploy.log || echo "")
           
