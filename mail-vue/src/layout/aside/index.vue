@@ -16,7 +16,7 @@
           <Icon icon="cil:send" width="20" height="20" />
           <span class="menu-name" style="margin-left: 16px">{{$t('sent')}}</span>
         </el-menu-item>
-        <el-menu-item @click="router.push({name: 'draft'})" index="draft" v-perm="'email:send'"
+        <el-menu-item v-if="hasPerm('email:send')" @click="router.push({name: 'draft'})" index="draft"
                       :class="route.meta.name === 'draft' ? 'choose-item' : ''">
           <Icon icon="ep:document" width="19" height="19" />
           <span class="menu-name" style="margin-left: 17px">{{$t('drafts')}}</span>

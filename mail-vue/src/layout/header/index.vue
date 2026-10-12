@@ -1,14 +1,21 @@
 <template>
   <div class="header" :class="!hasPerm('email:send') && !accountStore.currentAccount.shared ? 'not-send' : ''">
-    <div class="header-btn">
+    <div class="header-btn" :class="{ 'shared-header': accountStore.currentAccount.shared }">
       <hanburger @click="changeAside"></hanburger>
       <span class="breadcrumb-item">{{ $t(route.meta.title) }}</span>
+      <span v-if="accountStore.currentAccount.shared" class="selected-shared-mailbox"
+            :title="t('currentSharedMailbox', { email: accountStore.currentAccount.email })">
+        {{ accountStore.currentAccount.email }}
+      </span>
     </div>
-    <div v-if="hasPerm('email:send') || accountStore.currentAccount.shared" class="writer-box" @click="openSend">
+    <button v-if="hasPerm('email:send') || accountStore.currentAccount.shared" type="button" class="writer-box"
+            :aria-label="accountStore.currentAccount.shared ? t('composeAsShared', { email: accountStore.currentAccount.email }) : t('composeMail')"
+            :title="accountStore.currentAccount.shared ? t('composeAsShared', { email: accountStore.currentAccount.email }) : t('composeMail')"
+            @click="openSend">
       <div class="writer">
         <Icon icon="material-symbols:edit-outline-sharp" width="22" height="22"/>
       </div>
-    </div>
+    </button>
     <div class="toolbar">
       <div v-if="uiStore.dark" class="sun-icon icon-item" @click="openDark($event)">
         <Icon icon="mingcute:sun-fill"/>
@@ -380,6 +387,11 @@ function formatName(email) {
   align-items: center;
   justify-content: center;
   margin-left: 5px;
+  padding: 0;
+  border: 0;
+  background: none;
+
+  &:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 2px; }
 
   .writer {
     width: 34px;
@@ -403,8 +415,25 @@ function formatName(email) {
 .header-btn {
   display: inline-flex;
   align-items: center;
+  gap: 8px;
   height: 100%;
   min-width: 0;
+}
+
+.selected-shared-mailbox {
+  max-width: min(30vw, 240px);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--el-text-color-regular);
+  font-size: 12px;
+  text-align: left;
+  flex-shrink: 1;
+}
+
+@media (max-width: 767px) {
+  .shared-header .breadcrumb-item { display: none; }
+  .selected-shared-mailbox { max-width: 36vw; }
 }
 
 .breadcrumb-item {

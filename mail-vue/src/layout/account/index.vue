@@ -1,17 +1,23 @@
 <template>
   <div class="account-box">
     <div class="head-opt">
-      <Icon v-perm="'account:add'" class="icon add" icon="ion:add-outline" width="23" height="23" @click="add"/>
+      <Icon v-if="hasPerm('account:add')" class="icon add" icon="ion:add-outline" width="23" height="23" @click="add"/>
       <Icon class="icon refresh" icon="ion:reload" width="18" height="18" @click="refresh"/>
     </div>
     <el-scrollbar class="scrollbar" ref="scrollbarRef">
       <div v-if="accountStore.sharedAccounts.length" class="shared-mailboxes">
-        <div>{{ $t('sharedMailboxes') }}</div>
-        <el-card class="item" :class="itemBg(item.accountId)" v-for="item in accountStore.sharedAccounts" :key="item.accountId"
-                 @click="changeAccount(item)">
-          <div class="account">{{ item.email }}</div>
-          <div class="opt" @click.stop="copyAccount(item.email)">
-            <Icon icon="fluent-color:clipboard-24" width="22" height="22"/>
+        <div class="shared-heading">{{ $t('sharedMailboxes') }}</div>
+        <p class="shared-hint">{{ $t('sharedMailboxSelectHint') }}</p>
+        <el-card class="item shared-item" :class="itemBg(item.accountId)" v-for="item in accountStore.sharedAccounts" :key="item.accountId">
+          <button class="account shared-select" type="button" :aria-label="t('openSharedMailbox', { email: item.email })"
+                  :aria-pressed="accountStore.currentAccountId === item.accountId" @click="changeAccount(item)">
+            {{ item.email }}
+          </button>
+          <div class="opt">
+            <span v-if="accountStore.currentAccountId === item.accountId" class="selected-label">{{ $t('selectedMailbox') }}</span>
+            <button class="copy-address" type="button" :aria-label="t('copySharedAddress', { email: item.email })" @click="copyAccount(item.email)">
+              <Icon icon="fluent-color:clipboard-24" width="22" height="22"/>
+            </button>
           </div>
         </el-card>
       </div>
@@ -600,6 +606,16 @@ path[fill="#ffdda1"] {
       padding: 10px 0;
       color: var(--secondary-text-color);
     }
+  }
+
+  .shared-mailboxes {
+    .shared-heading { padding: 8px 10px 0; font-weight: 600; }
+    .shared-hint { padding: 0 10px; margin: 4px 0 10px; color: var(--el-text-color-regular); font-size: 12px; line-height: 1.4; }
+    .shared-item { cursor: default; }
+    .shared-select { display: block; width: 100%; padding: 0; border: 0; background: none; color: inherit; text-align: left; cursor: pointer; }
+    .selected-label { color: var(--el-color-primary); font-weight: 600; }
+    .copy-address { display: flex; align-items: center; margin-left: auto; padding: 0; border: 0; background: none; cursor: pointer; }
+    .shared-select:focus-visible, .copy-address:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 2px; }
   }
 
   .btn {

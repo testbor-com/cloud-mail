@@ -22,8 +22,11 @@
 
       <div class="header-right">
         <span class="email-count" v-if="total">{{ $t('emailCount', {total: total}) }}</span>
-        <Icon v-if="showAccountIcon" class="more-icon icon" width="16" height="16" icon="akar-icons:dot-grid-fill"
-              @click="changeAccountShow"/>
+        <button v-if="showAccountIcon" class="mailbox-toggle" type="button"
+                :aria-label="$t(accountStore.sharedAccounts.length ? 'sharedMailboxes' : 'tabMailboxes')" @click="changeAccountShow">
+          <Icon class="icon" width="16" height="16" icon="akar-icons:dot-grid-fill"/>
+          <span v-if="accountStore.sharedAccounts.length">{{ $t('sharedMailboxes') }}</span>
+        </button>
       </div>
     </div>
 
@@ -1307,9 +1310,18 @@ function loadData() {
     cursor: pointer;
   }
 
-  .more-icon {
-    margin-top: 8px;
-    margin-left: 15px;
+  .mailbox-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 4px 0 0 15px;
+    padding: 4px;
+    border: 0;
+    background: none;
+    color: var(--el-text-color-primary);
+    cursor: pointer;
+
+    &:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 2px; }
   }
 }
 
