@@ -169,12 +169,12 @@ export async function email(message, env, ctx) {
 
 		}
 
-		//转发到TG
+		//Forward to Telegram
 		if (tgBotStatus === settingConst.tgBotStatus.OPEN && tgChatId) {
 			await telegramService.sendEmailToBot({ env }, emailRow)
 		}
 
-		//转发到其他邮箱
+		//Forward to another mailbox
 		if (forwardStatus === settingConst.forwardStatus.OPEN && forwardEmail) {
 
 			const emails = forwardEmail.split(',');
@@ -191,7 +191,7 @@ export async function email(message, env, ctx) {
 
 		}
 
-		//转发到 Webhook
+		//Forward to the webhook
 		if (webhookStatus === settingConst.webhookStatus.OPEN && webhookUrl) {
 			await webhookService.sendEmail({ env }, emailRow, webhookUrl, webhookRetry, webhookSecret);
 		}

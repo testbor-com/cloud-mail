@@ -39,7 +39,7 @@ export const useEmailStore = defineStore('email', {
             for (const item of list) {
                 if (!item?.emailId) continue
                 if (!item.attList) item.attList = []
-                // 完整列表可能早于「标已读」返回，避免把本地已读状态盖回未读
+                // The full list may return before mark-as-read; avoid overwriting the local read state with unread
                 const prev = this.detailMap[item.emailId]
                 const keepRead = prev?.unread === EmailUnreadEnum.READ
                     || (currentId === item.emailId && this.contentData.email?.unread === EmailUnreadEnum.READ)

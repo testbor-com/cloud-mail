@@ -3,7 +3,7 @@ import email from '../entity/email';
 
 export const EMAIL_LIST_TEXT_LEN = 300;
 
-/** 去掉换行/回车/制表符，并压缩连续空格、标签间空白 */
+/** Remove newlines, carriage returns, and tabs; collapse repeated spaces and whitespace between tags */
 function sqlStripWhitespace(column) {
 	return sql`trim(replace(replace(replace(replace(replace(replace(
 		coalesce(${column}, ''),
@@ -15,10 +15,10 @@ function sqlStripWhitespace(column) {
 		'> <', '><'))`;
 }
 
-/** 完整查询：全部字段 */
+/** Full query: all columns */
 export const emailListColumns = getTableColumns(email);
 
-/** 摘要查询：列表 + 详情头部；有 text 则不读 content，没有才查 content（去空白），响应里不返回 content */
+/** Summary query: list and detail header; read content without whitespace only when text is absent, and omit content from the response */
 export const emailBriefColumns = {
 	emailId: email.emailId,
 	sendEmail: email.sendEmail,

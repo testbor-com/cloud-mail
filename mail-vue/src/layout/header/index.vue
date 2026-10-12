@@ -208,7 +208,7 @@ function openDark(e) {
   const maxY = Math.max(y, window.innerHeight - y)
   const endRadius = Math.hypot(maxX, maxY)
 
-  // 标记切换目标，供 CSS 选择器使用
+  // Mark the transition target for CSS selectors
   root.setAttribute('data-theme-to', nextIsDark ? 'dark' : 'light')
   root.style.setProperty('--vt-x', `${x}px`)
   root.style.setProperty('--vt-y', `${y}px`)
@@ -219,7 +219,7 @@ function openDark(e) {
   })
 
   transition.finished.finally(() => {
-    // 清理标记
+    // Remove the marker
     root.removeAttribute('data-theme-to')
   })
 }

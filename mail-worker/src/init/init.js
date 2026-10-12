@@ -339,7 +339,7 @@ const dbInit = {
       )
     `).run();
 
-		// 添加不区分大小写的唯一索引
+		// Add a case-insensitive unique index
 		try {
 			await c.env.db.prepare(`
 				CREATE UNIQUE INDEX IF NOT EXISTS idx_setting_code ON reg_key(code COLLATE NOCASE)
@@ -457,7 +457,7 @@ const dbInit = {
 	},
 
 	async v1_1DB(c) {
-		// 添加字段
+		// Add columns
 		const ADD_COLUMN_SQL_LIST = [
 			`ALTER TABLE email ADD COLUMN type INTEGER NOT NULL DEFAULT 0;`,
 			`ALTER TABLE email ADD COLUMN status INTEGER NOT NULL DEFAULT 0;`,
@@ -494,7 +494,7 @@ const dbInit = {
 
 		await Promise.all(promises);
 
-		// 创建 perm 表并初始化
+		// Create and initialize the perm table
 		await c.env.db.prepare(`
       CREATE TABLE IF NOT EXISTS perm (
         perm_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -545,7 +545,7 @@ const dbInit = {
 
 		await c.env.db.prepare(`UPDATE perm SET perm_key = 'setting:clean' WHERE perm_key = 'seting:clear'`).run();
 		await c.env.db.prepare(`DELETE FROM perm WHERE perm_key = 'user:star'`).run();
-		// 创建 role 表并插入默认身份
+		// Create the role table and insert default roles
 		await c.env.db.prepare(`
       CREATE TABLE IF NOT EXISTS role (
         role_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
@@ -573,7 +573,7 @@ const dbInit = {
       `).run();
 		}
 
-		// 创建 role_perm 表并初始化数据
+		// Create the role_perm table and initialize its data
 		await c.env.db.prepare(`
       CREATE TABLE IF NOT EXISTS role_perm (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -600,7 +600,7 @@ const dbInit = {
 	},
 
 	async intDB(c) {
-		// 初始化数据库表结构
+		// Initialize the database schema
 		await c.env.db.prepare(`
 		  CREATE TABLE IF NOT EXISTS email (
 			email_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,

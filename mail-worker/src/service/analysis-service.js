@@ -52,7 +52,7 @@ const analysisService = {
 
 		localDate = dayjs(localDate.format('YYYY-MM-DD HH:mm:ss'))
 
-		//获取时差
+		//Get the time difference
 		const diffHours = localDate.diff(utcDate, 'hour',true);
 
 
