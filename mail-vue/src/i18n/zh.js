@@ -47,6 +47,8 @@ const zh = {
     composeMail: '写邮件',
     composeAsShared: '以 {email} 写邮件',
     permissions: '权限控制',
+    standardUser: '普通用户',
+    standardUserDescription: '只有普通使用权限',
     inviteCode: '注册密钥',
     SystemSettings: '系统设置',
     noMoreData: '没有更多数据了',

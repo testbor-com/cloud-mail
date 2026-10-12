@@ -47,6 +47,8 @@ const en = {
     composeMail: 'Compose email',
     composeAsShared: 'Compose as {email}',
     permissions: 'Role',
+    standardUser: 'Standard User',
+    standardUserDescription: 'Standard access only',
     inviteCode: 'Invite Code',
     SystemSettings: 'System Settings',
     noMoreData: 'No more data',

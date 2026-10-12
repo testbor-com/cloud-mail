@@ -33,7 +33,7 @@
               </div>
               <div class="info-left-item">
                 <div>{{ $t('roleDesc') }}：</div>
-                <el-tag>{{ item.roleName }}</el-tag>
+                <el-tag>{{ displayRoleName(item.roleId, item.roleName, t) }}</el-tag>
               </div>
               <div class="info-left-item">
                 <div>{{ $t('validUntil') }}：</div>
@@ -68,7 +68,7 @@
           </template>
         </el-input>
         <el-select v-model="addForm.roleId" :placeholder="$t('roleDesc')">
-          <el-option v-for="item in roleList" :label="item.name" :value="item.roleId" :key="item.roleId"/>
+          <el-option v-for="item in roleList" :label="displayRoleName(item.roleId, item.name, t)" :value="item.roleId" :key="item.roleId"/>
         </el-select>
         <el-date-picker
             v-model="addForm.expireTime"
@@ -107,6 +107,7 @@ import {getTextWidth} from "@/utils/text.js";
 import dayjs from "dayjs";
 import {tzDayjs} from "@/utils/day.js";
 import {useI18n} from "vue-i18n";
+import {displayRoleName} from "@/utils/role-name.js";
 
 defineOptions({
   name: 'reg-key'

@@ -45,7 +45,7 @@
               {{ userStore.user.email }}
             </div>
             <div class="detail-user-type">
-              <el-tag>{{ userStore.user.role.name }}</el-tag>
+              <el-tag>{{ displayRoleName(userStore.user.role.roleId, userStore.user.role.name, t) }}</el-tag>
             </div>
             <div class="action-info">
               <div>
@@ -92,6 +92,7 @@ import {computed, ref} from "vue";
 import {useSettingStore} from "@/store/setting.js";
 import {hasPerm} from "@/perm/perm.js"
 import {useI18n} from "vue-i18n";
+import {displayRoleName} from "@/utils/role-name.js";
 import {setExtend} from "@/utils/day.js"
 
 const {t} = useI18n();
