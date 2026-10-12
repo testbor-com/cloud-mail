@@ -70,6 +70,10 @@ export async function email(message, env, ctx) {
 				account = await accountService.selectByEmailIncludeDel({ env: env }, baseEmail);
 			}
 		}
+		if (account?.shared && account.isDel === isDel.DELETE) {
+			message.setReject('Recipient disabled');
+			return;
+		}
 
 		if (!account && noRecipient === settingConst.noRecipient.CLOSE) {
 			message.setReject('Recipient not found');
@@ -78,11 +82,11 @@ export async function email(message, env, ctx) {
 
 		let userRow = {}
 
-		if (account) {
+		if (account && !account.shared) {
 			 userRow = await userService.selectByIdIncludeDel({ env: env }, account.userId);
 		}
 
-		if (account && userRow.email !== env.admin) {
+		if (account && !account.shared && userRow.email !== env.admin) {
 
 			let { banEmail, availDomain } = await roleService.selectByUserId({ env: env }, account.userId);
 
@@ -121,7 +125,7 @@ export async function email(message, env, ctx) {
 			inReplyTo: email.inReplyTo,
 			relation: email.references,
 			messageId: email.messageId,
-			userId: account ? account.userId : 0,
+			userId: account && !account.shared ? account.userId : 0,
 			accountId: account ? account.accountId : 0,
 			isDel: isDel.DELETE,
 			status: emailConst.status.SAVING
@@ -132,7 +136,8 @@ export async function email(message, env, ctx) {
 
 		for (let item of email.attachments) {
 			let attachment = { ...item };
-			attachment.key = constant.ATTACHMENT_PREFIX + await fileUtils.getBuffHash(attachment.content) + fileUtils.getExtFileName(item.filename);
+			attachment.key = account?.shared ? 'shared/attachments/' + crypto.randomUUID() + fileUtils.getExtFileName(item.filename) :
+				constant.ATTACHMENT_PREFIX + await fileUtils.getBuffHash(attachment.content) + fileUtils.getExtFileName(item.filename);
 			attachment.size = item.content.length ?? item.content.byteLength;
 			attachments.push(attachment);
 			if (attachment.contentId) {
@@ -150,7 +155,7 @@ export async function email(message, env, ctx) {
 
 		try {
 			if (attachments.length > 0) {
-				await attService.addAtt({ env }, attachments);
+				await attService.addAtt({ env }, attachments, account?.shared === 1);
 			}
 		} catch (e) {
 			console.error(e);
@@ -170,12 +175,12 @@ export async function email(message, env, ctx) {
 		}
 
 		//Forward to Telegram
-		if (tgBotStatus === settingConst.tgBotStatus.OPEN && tgChatId) {
+		if (!account?.shared && tgBotStatus === settingConst.tgBotStatus.OPEN && tgChatId) {
 			await telegramService.sendEmailToBot({ env }, emailRow)
 		}
 
 		//Forward to another mailbox
-		if (forwardStatus === settingConst.forwardStatus.OPEN && forwardEmail) {
+		if (!account?.shared && forwardStatus === settingConst.forwardStatus.OPEN && forwardEmail) {
 
 			const emails = forwardEmail.split(',');
 
@@ -192,7 +197,7 @@ export async function email(message, env, ctx) {
 		}
 
 		//Forward to the webhook
-		if (webhookStatus === settingConst.webhookStatus.OPEN && webhookUrl) {
+		if (!account?.shared && webhookStatus === settingConst.webhookStatus.OPEN && webhookUrl) {
 			await webhookService.sendEmail({ env }, emailRow, webhookUrl, webhookRetry, webhookSecret);
 		}
 

@@ -22,6 +22,16 @@ const routes = [
                 }
             },
             {
+                path: '/sent',
+                name: 'send',
+                component: () => import('@/views/send/index.vue'),
+                meta: {
+                    title: 'sent',
+                    name: 'send',
+                    menu: true
+                }
+            },
+            {
                 path: '/mail',
                 name: 'content',
                 component: () => import('@/views/content/index.vue'),
@@ -48,6 +58,16 @@ const routes = [
                 meta: {
                     title: 'starred',
                     name: 'star',
+                    menu: true
+                }
+            },
+            {
+                path: '/shared-mailboxes',
+                name: 'shared-mailboxes',
+                component: () => import('@/views/shared-mailboxes/index.vue'),
+                meta: {
+                    title: 'sharedMailboxes',
+                    name: 'shared-mailboxes',
                     menu: true
                 }
             },

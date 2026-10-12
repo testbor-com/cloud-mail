@@ -1,10 +1,10 @@
 <template>
-  <div class="header" :class="!hasPerm('email:send') ? 'not-send' : ''">
+  <div class="header" :class="!hasPerm('email:send') && !accountStore.currentAccount.shared ? 'not-send' : ''">
     <div class="header-btn">
       <hanburger @click="changeAside"></hanburger>
       <span class="breadcrumb-item">{{ $t(route.meta.title) }}</span>
     </div>
-    <div v-perm="'email:send'" class="writer-box" @click="openSend">
+    <div v-if="hasPerm('email:send') || accountStore.currentAccount.shared" class="writer-box" @click="openSend">
       <div class="writer">
         <Icon icon="material-symbols:edit-outline-sharp" width="22" height="22"/>
       </div>
@@ -79,6 +79,7 @@ import {logout} from "@/request/login.js";
 import {Icon} from "@iconify/vue";
 import {useUiStore} from "@/store/ui.js";
 import {useUserStore} from "@/store/user.js";
+import {useAccountStore} from '@/store/account.js';
 import {useRoute} from "vue-router";
 import {computed, ref} from "vue";
 import {useSettingStore} from "@/store/setting.js";
@@ -90,6 +91,7 @@ const {t} = useI18n();
 const route = useRoute();
 const settingStore = useSettingStore();
 const userStore = useUserStore();
+const accountStore = useAccountStore();
 const uiStore = useUiStore();
 const logoutLoading = ref(false)
 const userInfoShow = ref(false)
@@ -100,6 +102,7 @@ const accountCount = computed(() => {
 })
 
 const sendType = computed(() => {
+	if (accountStore.currentAccount.shared) return t('sharedMailboxes');
 
   if (settingStore.settings.send === 1) {
     return t('disabled')
@@ -244,6 +247,9 @@ function clickLogout() {
   logoutLoading.value = true
   logout().then(() => {
     localStorage.removeItem("token")
+    accountStore.sharedAccounts = []
+    accountStore.currentAccount = {}
+    accountStore.currentAccountId = 0
     router.replace('/login')
   }).finally(() => {
     logoutLoading.value = false

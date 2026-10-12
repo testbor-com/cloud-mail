@@ -49,6 +49,7 @@ const publicService = {
 		num = (num - 1) * size;
 
 		let conditions = []
+		conditions.push(sql`NOT EXISTS (SELECT 1 FROM account a WHERE a.account_id = ${email.accountId} AND a.shared = 1)`)
 
 		if (toEmail) {
 			conditions.push(sql`${email.toEmail} COLLATE NOCASE LIKE ${toEmail}`)
@@ -146,7 +147,7 @@ const publicService = {
 
 		}
 
-		userList.push(c.env.db.prepare(`UPDATE account SET user_id = (SELECT user_id FROM user WHERE user.email = account.email) WHERE user_id = 0;`))
+		userList.push(c.env.db.prepare(`UPDATE account SET user_id = (SELECT user_id FROM user WHERE user.email = account.email) WHERE user_id = 0 AND shared = 0;`))
 
 		try {
 			await c.env.db.batch(userList);

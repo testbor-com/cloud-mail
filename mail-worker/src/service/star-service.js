@@ -8,6 +8,7 @@ import { emailListColumns, emailBriefColumns } from '../lib/email-list-columns';
 import { isDel } from '../const/entity-const';
 import attService from "./att-service";
 import { t } from '../i18n/i18n'
+import sharedMailboxService from './shared-mailbox-service';
 const starService = {
 
 	async add(c, params, userId) {
@@ -16,7 +17,8 @@ const starService = {
 		if (!email) {
 			throw new BizError(t('starNotExistEmail'));
 		}
-		if (email.userId !== userId) {
+		const shared = !!(await sharedMailboxService.getShared(c, email.accountId));
+		if (shared ? !await sharedMailboxService.hasAccess(c, email.accountId, userId) : email.userId !== userId) {
 			throw new BizError(t('starNotExistEmail'));
 		}
 		const exist = await orm(c).select().from(star).where(
@@ -48,10 +50,12 @@ const starService = {
 		full = Number(full) === 1;
 		const columns = full ? emailListColumns : emailBriefColumns;
 
-		const list = await orm(c).select({
+		let list = await orm(c).select({
 			isStar: sql`1`.as('isStar'),
 			starId: star.starId,
-			...columns
+			...columns,
+			userId: email.userId,
+			accountId: email.accountId
 		}).from(star)
 			.leftJoin(email, eq(email.emailId, star.emailId))
 			.where(
@@ -62,6 +66,10 @@ const starService = {
 			.orderBy(desc(star.emailId))
 			.limit(size)
 			.all();
+		const accessible = await Promise.all(list.map(async row =>
+			await sharedMailboxService.getShared(c, row.accountId) ?
+				await sharedMailboxService.hasAccess(c, row.accountId, userId) : row.userId === userId));
+		list = list.filter((_, index) => accessible[index]);
 
 		if (full) {
 			const emailIds = list.map(item => item.emailId);

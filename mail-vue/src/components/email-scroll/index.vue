@@ -12,11 +12,11 @@
 
         <slot name="first"></slot>
         <Icon class="icon reload" icon="ion:reload" width="18" height="18" @click="refresh"/>
-        <Icon v-perm="'email:delete'" class="icon delete" icon="uiw:delete" width="16" height="16"
-              v-if="getSelectedMailsIds().length > 0"
+        <Icon class="icon delete" icon="uiw:delete" width="16" height="16"
+              v-if="getSelectedMailsIds().length > 0 && (hasPerm('email:delete') || accountStore.currentAccount.shared)"
               @click="handleDelete"/>
-        <Icon v-perm="'email:delete'" class="icon delete" icon="fluent:mail-read-20-regular" width="21" height="21"
-              v-if="getSelectedMailsIds().length > 0 && showUnread"
+        <Icon class="icon delete" icon="fluent:mail-read-20-regular" width="21" height="21"
+              v-if="getSelectedMailsIds().length > 0 && showUnread && (hasPerm('email:delete') || accountStore.currentAccount.shared)"
               @click="handleRead"/>
       </div>
 
@@ -241,6 +241,8 @@ import {computed, onActivated, reactive, ref, watch, nextTick, onMounted, onUnmo
 import {useEmailStore} from "@/store/email.js";
 import {useUiStore} from "@/store/ui.js";
 import {useSettingStore} from "@/store/setting.js";
+import {useAccountStore} from '@/store/account.js';
+import {hasPerm} from '@/perm/perm.js';
 import {sleep} from "@/utils/time-utils.js"
 import {fromNow} from "@/utils/day.js";
 import {useI18n} from "vue-i18n";
@@ -303,6 +305,7 @@ const {t} = useI18n()
 const settingStore = useSettingStore()
 const uiStore = useUiStore();
 const emailStore = useEmailStore();
+const accountStore = useAccountStore();
 const loading = ref(false);
 const followLoading = ref(false);
 const noLoading = ref(false);

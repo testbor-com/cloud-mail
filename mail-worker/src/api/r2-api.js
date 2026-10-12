@@ -3,6 +3,7 @@ import app from '../hono/hono';
 
 app.get('/oss/*', async (c) => {
 	const key = c.req.path.split('/oss/')[1];
+	if (key.startsWith('shared/attachments/')) return c.text('Forbidden', 403);
 	const obj = await r2Service.getObj(c, key);
 	return new Response(obj.body, {
 		headers: {

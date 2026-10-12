@@ -1,5 +1,6 @@
 import orm from '../entity/orm';
 import email from '../entity/email';
+import account from '../entity/account';
 import settingService from './setting-service';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
@@ -27,6 +28,9 @@ const telegramService = {
 		}
 
 		const emailRow = await orm(c).select().from(email).where(eq(email.emailId, result.emailId)).get();
+		const accountRow = emailRow && await orm(c).select({ shared: account.shared }).from(account)
+			.where(eq(account.accountId, emailRow.accountId)).get();
+		if (accountRow?.shared) return emailTextTemplate('Access denied');
 
 		if (emailRow) {
 

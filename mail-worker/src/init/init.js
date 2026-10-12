@@ -32,8 +32,29 @@ const dbInit = {
 		await this.v3_1DB(c);
 		await this.v3_2DB(c);
 		await this.v3_3DB(c);
+		await this.v3_4DB(c);
 		await settingService.refresh(c);
 		return c.text('success');
+	},
+
+	async v3_4DB(c) {
+		await c.env.db.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS idx_account_email_nocase ON account(email COLLATE NOCASE)`).run();
+		const column = await c.env.db.prepare(`SELECT name FROM pragma_table_info('account') WHERE name = 'shared'`).first();
+		if (!column) {
+			await c.env.db.prepare(`ALTER TABLE account ADD COLUMN shared INTEGER NOT NULL DEFAULT 0`).run();
+		}
+		await c.env.db.prepare(`CREATE TABLE IF NOT EXISTS shared_mailbox_member (
+			account_id INTEGER NOT NULL,
+			user_id INTEGER NOT NULL,
+			PRIMARY KEY (account_id, user_id)
+		)`).run();
+		await c.env.db.prepare(`CREATE INDEX IF NOT EXISTS idx_shared_mailbox_member_user ON shared_mailbox_member(user_id, account_id)`).run();
+		await c.env.db.prepare(`CREATE TABLE IF NOT EXISTS shared_mailbox_key (
+			id INTEGER PRIMARY KEY CHECK (id = 1),
+			secret TEXT NOT NULL
+		)`).run();
+		const secret = Array.from(crypto.getRandomValues(new Uint8Array(32)), byte => byte.toString(16).padStart(2, '0')).join('');
+		await c.env.db.prepare(`INSERT OR IGNORE INTO shared_mailbox_key (id, secret) VALUES (1, ?)`).bind(secret).run();
 	},
 
 	async v3_3DB(c) {

@@ -2,13 +2,13 @@
   <div class="box">
     <div class="header-actions">
       <Icon class="icon" icon="material-symbols-light:arrow-back-ios-new" width="20" height="20" @click="handleBack"/>
-      <Icon v-perm="'email:delete'" class="icon" icon="uiw:delete" width="16" height="16" @click="handleDelete"/>
+      <Icon v-if="hasPerm('email:delete') || accountStore.currentAccount.shared" class="icon" icon="uiw:delete" width="16" height="16" @click="handleDelete"/>
       <span class="star" v-if="emailStore.contentData.showStar">
         <Icon class="icon" @click="changeStar" v-if="email.isStar" icon="fluent-color:star-16" width="20" height="20"/>
         <Icon class="icon" @click="changeStar" v-else icon="solar:star-line-duotone" width="18" height="18"/>
       </span>
-      <Icon class="icon" v-if="emailStore.contentData.showReply" v-perm="'email:send'"  @click="openReply" icon="la:reply" width="21" height="21" />
-      <Icon class="icon" v-if="emailStore.contentData.showReply" v-perm="'email:send'"  @click="openForward" icon="iconoir:arrow-up-right" width="20" height="20" />
+      <Icon class="icon" v-if="emailStore.contentData.showReply && (hasPerm('email:send') || accountStore.currentAccount.shared)" @click="openReply" icon="la:reply" width="21" height="21" />
+      <Icon class="icon" v-if="emailStore.contentData.showReply && (hasPerm('email:send') || accountStore.currentAccount.shared)" @click="openForward" icon="iconoir:arrow-up-right" width="20" height="20" />
     </div>
     <div></div>
     <el-scrollbar class="scrollbar">
@@ -55,7 +55,7 @@
                 <div class="att-size">{{ formatBytes(att.size) }}</div>
                 <div class="opt-icon att-icon">
                   <Icon v-if="isImage(att.filename)" icon="hugeicons:view" width="22" height="22" @click="showImage(att.key)"/>
-                  <a :href="cvtR2Url(att.key)" download>
+                  <a :href="att.key.startsWith('shared/attachments/') ? attUrls[att.key] : cvtR2Url(att.key)" :download="att.filename">
                     <Icon icon="system-uicons:push-down" width="22" height="22"/>
                   </a>
                 </div>
@@ -93,6 +93,8 @@ import {allEmailThread} from "@/request/all-email.js";
 import {useUiStore} from "@/store/ui.js";
 import {useI18n} from "vue-i18n";
 import {EmailUnreadEnum} from "@/enums/email-enum.js";
+import {sharedMailboxFile} from '@/request/shared-mailbox.js';
+import {hasPerm} from '@/perm/perm.js';
 
 const uiStore = useUiStore();
 const settingStore = useSettingStore();
@@ -110,6 +112,31 @@ const thread = ref([])
 const displayThread = computed(() => thread.value.length ? thread.value : [email.value])
 const showPreview = ref(false)
 const srcList = reactive([])
+const attUrls = reactive({})
+
+function clearProtectedFiles() {
+  for (const key of Object.keys(attUrls)) {
+    URL.revokeObjectURL(attUrls[key]);
+    delete attUrls[key];
+  }
+}
+
+async function loadProtectedFiles(list, request) {
+  const keys = new Set();
+  for (const row of list) {
+    for (const att of row.attList || []) {
+      if (att.key.startsWith('shared/attachments/')) keys.add(att.key);
+    }
+    for (const match of (row.content || '').matchAll(/\{\{domain\}\}(shared\/attachments\/[^"'\s<>]+)/g)) {
+      keys.add(match[1]);
+    }
+  }
+  await Promise.all([...keys].map(async key => {
+    const blob = await sharedMailboxFile(key);
+    if (request !== threadRequest) return;
+    attUrls[key] = URL.createObjectURL(blob);
+  }));
+}
 
 const { t } = useI18n()
 watch(() => accountStore.currentAccountId, () => {
@@ -122,6 +149,7 @@ let threadRequest = 0
 watch(() => email.value.emailId, async (emailId) => {
   const request = ++threadRequest
   thread.value = []
+  clearProtectedFiles()
   if (!emailId) return
   const load = emailStore.contentData.delType === 'physics' ? allEmailThread : emailThread
   try {
@@ -129,6 +157,7 @@ watch(() => email.value.emailId, async (emailId) => {
     if (request !== threadRequest) return
     emailStore.applyFullList(list)
     thread.value = list
+    await loadProtectedFiles(list, request)
     tryMarkRead()
   } catch (e) {
     if (request === threadRequest) thread.value = []
@@ -175,6 +204,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   threadRequest++
+  clearProtectedFiles()
   emailStore.contentData.showUnread = false;
   readRequesting = false
   window.removeEventListener('keydown', handleKeyDown);
@@ -204,12 +234,14 @@ function toMessage(message) {
 function formatImage(content) {
   content = content || '';
   const domain = settingStore.settings.r2Domain;
-  return  content.replace(/{{domain}}/g, toOssDomain(domain) + '/');
+  return content.replace(/\{\{domain\}\}(shared\/attachments\/[^"'\s<>]+)/g,
+    (_, key) => attUrls[key] || 'about:blank').replace(/{{domain}}/g, toOssDomain(domain) + '/');
 }
 
-function showImage(key) {
+async function showImage(key) {
   if (!isImage(key)) return;
-  const url = cvtR2Url(key)
+  const url = key.startsWith('shared/attachments/') ?
+    (attUrls[key] || (attUrls[key] = URL.createObjectURL(await sharedMailboxFile(key)))) : cvtR2Url(key)
   srcList.length = 0
   srcList.push(url)
   showPreview.value = true

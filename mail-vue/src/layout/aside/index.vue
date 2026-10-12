@@ -11,7 +11,7 @@
           <Icon icon="hugeicons:mailbox-01" width="20" height="20" />
           <span class="menu-name" style="margin-left: 16px">{{$t('inbox')}}</span>
         </el-menu-item>
-        <el-menu-item @click="router.push({name: 'send'})" index="send" v-perm="'email:send'"
+        <el-menu-item v-if="hasPerm('email:send') || accountStore.sharedAccounts.length" @click="router.push({name: 'send'})" index="send"
                       :class="route.meta.name === 'send' ? 'choose-item' : ''">
           <Icon icon="cil:send" width="20" height="20" />
           <span class="menu-name" style="margin-left: 16px">{{$t('sent')}}</span>
@@ -34,6 +34,11 @@
         <div class="manage-title" v-perm="['all-email:query','user:query','role:query','setting:query','analysis:query','reg-key:query']">
           <div>{{$t('manage')}}</div>
         </div>
+        <el-menu-item v-if="hasPerm('*')" @click="router.push({name: 'shared-mailboxes'})" index="shared-mailboxes"
+                      :class="route.meta.name === 'shared-mailboxes' ? 'choose-item' : ''">
+          <Icon icon="hugeicons:mailbox-01" width="20" height="20" />
+          <span class="menu-name" style="margin-left: 16px">{{ $t('sharedMailboxes') }}</span>
+        </el-menu-item>
         <el-menu-item @click="router.push({name: 'analysis'})" index="analysis" v-perm="'analysis:query'"
                       :class="route.meta.name === 'analysis' ? 'choose-item' : ''">
           <Icon icon="fluent:data-pie-20-regular" width="24" height="24" />
@@ -73,9 +78,12 @@
 import router from "@/router/index.js";
 import { useRoute } from "vue-router";
 import {Icon} from "@iconify/vue";
+import {hasPerm} from '@/perm/perm.js';
+import {useAccountStore} from '@/store/account.js';
 import {useSettingStore} from "@/store/setting.js";
 
 const settingStore = useSettingStore();
+const accountStore = useAccountStore();
 const route = useRoute();
 
 </script>

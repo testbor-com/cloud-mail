@@ -7,6 +7,7 @@ import userService from '../service/user-service';
 import permService from '../service/perm-service';
 import { t } from '../i18n/i18n'
 import app from '../hono/hono';
+import sharedMailboxService from '../service/shared-mailbox-service';
 
 const exclude = [
 	'/login',
@@ -131,6 +132,7 @@ app.use('*', async (c, next) => {
 	if (!authInfo.tokens.includes(token)) {
 		throw new BizError(t('authExpired'), 401);
 	}
+	c.set('user', authInfo.user);
 
 	const permIndex = requirePerms.findIndex(item => {
 		return path.startsWith(item);
@@ -146,7 +148,16 @@ app.use('*', async (c, next) => {
 			return path.startsWith(item);
 		});
 
-		if (userPermIndex === -1 && authInfo.user.email !== c.env.admin) {
+		let sharedAllowed = false;
+		if (userPermIndex === -1 && path === '/email/send') {
+			const body = await c.req.raw.clone().json();
+			sharedAllowed = await sharedMailboxService.hasAccess(c, body.accountId, userId);
+		}
+		if (userPermIndex === -1 && path === '/email/delete') {
+			const ids = String(c.req.query('emailIds') || '').split(',').map(Number);
+			sharedAllowed = await sharedMailboxService.canManageEmails(c, ids, userId);
+		}
+		if (userPermIndex === -1 && !sharedAllowed && authInfo.user.email !== c.env.admin) {
 			throw new BizError(t('unauthorized'), 403);
 		}
 

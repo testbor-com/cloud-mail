@@ -5,6 +5,16 @@
       <Icon class="icon refresh" icon="ion:reload" width="18" height="18" @click="refresh"/>
     </div>
     <el-scrollbar class="scrollbar" ref="scrollbarRef">
+      <div v-if="accountStore.sharedAccounts.length" class="shared-mailboxes">
+        <div>{{ $t('sharedMailboxes') }}</div>
+        <el-card class="item" :class="itemBg(item.accountId)" v-for="item in accountStore.sharedAccounts" :key="item.accountId"
+                 @click="changeAccount(item)">
+          <div class="account">{{ item.email }}</div>
+          <div class="opt" @click.stop="copyAccount(item.email)">
+            <Icon icon="fluent-color:clipboard-24" width="22" height="22"/>
+          </div>
+        </el-card>
+      </div>
       <div v-infinite-scroll="getAccountList" :infinite-scroll-distance="600" :infinite-scroll-immediate="false">
         <el-card class="item" :class="itemBg(item.accountId)" v-for="(item, index) in accounts" :key="item.accountId"
                  @click="changeAccount(item)">
@@ -145,10 +155,24 @@ import {useUserStore} from "@/store/user.js";
 import {hasPerm} from "@/perm/perm.js"
 import {useI18n} from "vue-i18n";
 import {AccountAllReceiveEnum} from "@/enums/account-enum.js";
+import {sharedMailboxMine} from '@/request/shared-mailbox.js';
 
 const {t} = useI18n();
 const userStore = useUserStore();
 const accountStore = useAccountStore();
+function refreshShared() {
+  const token = localStorage.getItem('token');
+  sharedMailboxMine().then(list => {
+    if (localStorage.getItem('token') !== token) return;
+    accountStore.sharedAccounts = list;
+    if (accountStore.currentAccount.shared && !list.some(item => item.accountId === accountStore.currentAccountId)) {
+      accountStore.currentAccountId = userStore.user.account.accountId;
+      accountStore.currentAccount = userStore.user.account;
+    }
+  });
+}
+
+refreshShared();
 const settingStore = useSettingStore();
 const emailStore = useEmailStore();
 const showAdd = ref(false)
@@ -186,7 +210,7 @@ if (hasPerm('account:query')) {
 }
 
 watch(() => accountStore.changeUserAccountName, () => {
-  accounts[0].name = accountStore.changeUserAccountName
+  if (accounts[0]) accounts[0].name = accountStore.changeUserAccountName
 })
 
 watch(() => settingStore.domainList, (list) => {
@@ -326,6 +350,7 @@ function remove(account) {
 }
 
 function refresh() {
+	refreshShared();
   if (loading.value) {
     return
   }
@@ -386,6 +411,7 @@ async function copyAccount(account) {
 }
 
 function getAccountList() {
+	if (!hasPerm('account:query')) return;
 
   if (loading.value || followLoading.value || noLoading.value) return;
 
@@ -411,7 +437,7 @@ function getAccountList() {
     if (list.length < queryParams.size) {
       noLoading.value = true
     }
-    if (accounts.length === 0) {
+    if (accounts.length === 0 && !accountStore.currentAccountId && list[0]) {
       accountStore.currentAccount = list[0]
     }
 

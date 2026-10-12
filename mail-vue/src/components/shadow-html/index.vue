@@ -6,6 +6,7 @@
 
 <script setup>
 import { ref, onMounted, watch } from 'vue'
+import DOMPurify from 'dompurify'
 
 const props = defineProps({
   html: {
@@ -20,14 +21,15 @@ let shadowRoot = null
 
 function updateContent() {
   if (!shadowRoot) return;
+  const safeHtml = DOMPurify.sanitize(props.html, { USE_PROFILES: { html: true } });
 
   // 1. Extract the <body> style attribute, if present
   const bodyStyleRegex = /<body[^>]*style="([^"]*)"[^>]*>/i;
-  const bodyStyleMatch = props.html.match(bodyStyleRegex);
+  const bodyStyleMatch = safeHtml.match(bodyStyleRegex);
   const bodyStyle = bodyStyleMatch ? bodyStyleMatch[1] : '';
 
   // 2. Remove the <body> tags while keeping their contents
-  const cleanedHtml = props.html.replace(/<\/?body[^>]*>/gi, '');
+  const cleanedHtml = safeHtml.replace(/<\/?body[^>]*>/gi, '');
 
   // 3. Apply the body style to .shadow-content
   shadowRoot.innerHTML = `
@@ -63,7 +65,6 @@ function updateContent() {
         width: fit-content;
         height: fit-content;
         min-width: 100%;
-        ${bodyStyle ? bodyStyle : ''} /* Inject the body style */
       }
 
       img:not(table img) {
@@ -76,6 +77,7 @@ function updateContent() {
       ${cleanedHtml}
     </div>
   `;
+  if (bodyStyle) shadowRoot.querySelector('.shadow-content').style.cssText = bodyStyle;
 }
 
 function autoScale() {

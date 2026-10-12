@@ -23,6 +23,7 @@ import domainUtils from '../utils/domain-uitls';
 import account from "../entity/account";
 import { att } from '../entity/att';
 import telegramService from './telegram-service';
+import sharedMailboxService from './shared-mailbox-service';
 
 const emailService = {
 
@@ -60,13 +61,17 @@ const emailService = {
 			size = 50;
 		}
 
-		if (isNaN(allReceive)) {
-			let accountRow = await accountService.selectById(c, accountId);
-			allReceive = accountRow.allReceive;
+		const accountRow = await accountService.selectById(c, accountId);
+		if (isNaN(allReceive)) allReceive = accountRow?.allReceive || 0;
+		const shared = accountRow?.shared === 1;
+		if (shared) {
+			await sharedMailboxService.requireAccess(c, accountId, userId);
+			allReceive = 0;
 		}
 
-		const filters = this.emailListFilters({ userId, accountId, type, allReceive, emailId, timeSort });
-		const countFilters = this.emailListFilters({ userId, accountId, type, allReceive, withCursor: false });
+		const ownerId = shared ? 0 : userId;
+		const filters = this.emailListFilters({ userId: ownerId, accountId, type, allReceive, emailId, timeSort });
+		const countFilters = this.emailListFilters({ userId: ownerId, accountId, type, allReceive, withCursor: false });
 		const columns = full ? emailListColumns : emailBriefColumns;
 
 		const query = orm(c)
@@ -110,7 +115,7 @@ const emailService = {
 			userId: email.userId,
 		}).from(email).where(
 			and(
-				eq(email.userId, userId),
+				eq(email.userId, ownerId),
 				eq(email.type, type),
 				eq(email.isDel, isDel.NORMAL),
 				allReceive ? undefined : eq(email.accountId, accountId)
@@ -134,7 +139,7 @@ const emailService = {
 			latestEmail = {
 				emailId: 0,
 				accountId: accountId,
-				userId: userId,
+				userId: ownerId,
 			}
 		}
 
@@ -179,10 +184,15 @@ const emailService = {
 
 		const selected = await orm(c).select().from(email).where(and(
 			eq(email.emailId, emailId),
-			admin ? undefined : eq(email.userId, userId),
 			admin ? undefined : eq(email.isDel, isDel.NORMAL)
 		)).get();
 		if (!selected) {
+			throw new BizError(t('notExistEmail'), 404);
+		}
+		const shared = selected.accountId > 0 && !!(await sharedMailboxService.getShared(c, selected.accountId));
+		if (shared && (!admin || c.get('user').email !== c.env.admin)) {
+			await sharedMailboxService.requireAccess(c, selected.accountId, userId);
+		} else if (!admin && selected.userId !== userId) {
 			throw new BizError(t('notExistEmail'), 404);
 		}
 
@@ -203,6 +213,7 @@ const emailService = {
 			});
 			const rows = await orm(c).select().from(email).where(and(
 				eq(email.userId, ownerId),
+				shared ? eq(email.accountId, selected.accountId) : undefined,
 				admin ? undefined : eq(email.isDel, isDel.NORMAL),
 				or(
 					inArray(email.messageId, ids),
@@ -291,11 +302,12 @@ const emailService = {
 	async delete(c, params, userId) {
 		const { emailIds } = params;
 		const emailIdList = emailIds.split(',').map(Number);
+		await this.requireEmailAccess(c, emailIdList, userId);
 		const { syncDelete } = await settingService.query(c);
 
 		if (syncDelete === settingConst.syncDelete.OPEN) {
 			const owned = await orm(c).select({ emailId: email.emailId }).from(email)
-				.where(and(eq(email.userId, userId), inArray(email.emailId, emailIdList)))
+				.where(inArray(email.emailId, emailIdList))
 				.all();
 			const ownedIds = owned.map(row => row.emailId);
 			if (ownedIds.length) {
@@ -305,10 +317,35 @@ const emailService = {
 		}
 
 		await orm(c).update(email).set({ isDel: isDel.DELETE }).where(
-			and(
-				eq(email.userId, userId),
-				inArray(email.emailId, emailIdList)))
+			inArray(email.emailId, emailIdList))
 			.run();
+	},
+
+	async requireEmailAccess(c, emailIds, userId) {
+		if (!Array.isArray(emailIds) || !emailIds.length || emailIds.some(id => !Number.isSafeInteger(id) || id < 1)) {
+			throw new BizError('Invalid message ID', 400);
+		}
+		const rows = await orm(c).select({
+			emailId: email.emailId, userId: email.userId, accountId: email.accountId, shared: account.shared
+		}).from(email).leftJoin(account, eq(account.accountId, email.accountId))
+			.where(and(inArray(email.emailId, emailIds), eq(email.isDel, isDel.NORMAL))).all();
+		if (rows.length !== new Set(emailIds).size) throw new BizError('Message not found', 404);
+		for (const row of rows) {
+			const allowed = row.shared === 1 ? await sharedMailboxService.hasAccess(c, row.accountId, userId) : row.userId === userId;
+			if (!allowed) {
+				throw new BizError('Message access denied', 403);
+			}
+		}
+	},
+
+	async requireSharedOperations(c, emailIds, userId) {
+		if (c.get('user').email === c.env.admin || !emailIds.length) return;
+		const rows = await orm(c).select({ accountId: email.accountId }).from(email)
+			.innerJoin(account, eq(account.accountId, email.accountId))
+			.where(and(inArray(email.emailId, emailIds), eq(account.shared, 1))).all();
+		for (const accountId of new Set(rows.map(row => row.accountId))) {
+			await sharedMailboxService.requireAccess(c, accountId, userId);
+		}
 	},
 
 	receive(c, params, cidAttList, r2domain) {
@@ -333,7 +370,8 @@ const emailService = {
 
 		const { resendTokens, r2Domain, send, domainList } = await settingService.query(c);
 
-		let { imageDataList, html } = await attService.toImageUrlHtml(c, content);
+		let imageDataList = [];
+		let html = content;
 
 		//Check whether sending is disabled
 		if (send === settingConst.send.CLOSE) {
@@ -342,6 +380,17 @@ const emailService = {
 
 		const userRow = await userService.selectById(c, userId);
 		const roleRow = await roleService.selectById(c, userRow.type);
+		const accountRow = await accountService.selectById(c, accountId);
+
+		if (!accountRow) {
+			throw new BizError(t('senderAccountNotExist'));
+		}
+
+		if (accountRow.shared) {
+			await sharedMailboxService.requireAccess(c, accountId, userId);
+		} else if (accountRow.userId !== userId) {
+			throw new BizError(t('sendEmailNotCurUser'));
+		}
 
 		//Check whether all recipients are internal mailboxes
 		const allInternal = receiveEmail.every(email => {
@@ -349,7 +398,7 @@ const emailService = {
 			return domainList.includes(domain);
 		});
 
-		if (c.env.admin !== userRow.email) {
+		if (c.env.admin !== userRow.email && !accountRow.shared) {
 
 			//Sending is disabled
 			if (roleRow.sendType === 'ban') {
@@ -364,7 +413,7 @@ const emailService = {
 		}
 
 		//For non-admin users, enforce the role send limit
-		if (c.env.admin !== userRow.email && roleRow.sendCount) {
+		if (c.env.admin !== userRow.email && !accountRow.shared && roleRow.sendCount) {
 
 			if (userRow.sendCount >= roleRow.sendCount) {
 				if (roleRow.sendType === 'day') throw new BizError(t('daySendLimit'), 403);
@@ -378,23 +427,14 @@ const emailService = {
 
 		}
 
-		const accountRow = await accountService.selectById(c, accountId);
-
-		if (!accountRow) {
-			throw new BizError(t('senderAccountNotExist'));
-		}
-
-		if (accountRow.userId !== userId) {
-			throw new BizError(t('sendEmailNotCurUser'));
-		}
-
-		if (c.env.admin !== userRow.email) {
+		if (c.env.admin !== userRow.email && !accountRow.shared) {
 			//The user lacks permission to use this domain
 			if(!roleService.hasAvailDomainPerm(roleRow.availDomain, accountRow.email)) {
 				throw new BizError(t('noDomainPermSend'),403)
 			}
 
 		}
+		({ imageDataList, html } = await attService.toImageUrlHtml(c, content, accountRow.shared === 1));
 
 		const domain = emailUtils.getDomain(accountRow.email);
 		const resendToken = resendTokens[domain];
@@ -420,7 +460,7 @@ const emailService = {
 
 			emailRow = await this.selectById(c, emailId);
 
-			if (!emailRow || emailRow.userId !== userId) {
+			if (!emailRow || (accountRow.shared ? emailRow.accountId !== accountRow.accountId : emailRow.userId !== userId)) {
 				throw new BizError(t('notExistEmailReply'));
 			}
 			references = [emailRow.relation, emailRow.messageId].filter(Boolean).join(' ');
@@ -484,7 +524,7 @@ const emailService = {
 		emailData.accountId = accountId;
 		emailData.status = useCloudflareEmail ? emailConst.status.DELIVERED : emailConst.status.SENT;
 		emailData.type = emailConst.type.SEND;
-		emailData.userId = userId;
+		emailData.userId = accountRow.shared ? 0 : userId;
 		emailData.resendEmailId = data?.id;
 		emailData.messageId = allInternal ? `<${crypto.randomUUID()}@${domain}>` :
 			(useCloudflareEmail ? data?.id : data?.message_id) || '';
@@ -503,7 +543,7 @@ const emailService = {
 		}
 
 		//Increment the user send count when the role has a send limit
-		if (roleRow.sendCount && roleRow.sendType !== 'internal') {
+		if (!accountRow.shared && roleRow.sendCount && roleRow.sendType !== 'internal') {
 			await userService.incrUserSendCount(c, receiveEmail.length, userId);
 		}
 
@@ -515,7 +555,7 @@ const emailService = {
 			if (imageDataList.length > 10) {
 				throw new BizError(t('imageAttLimit'));
 			}
-			await attService.saveArticleAtt(c, imageDataList, userId, accountId, emailResult.emailId);
+			await attService.saveArticleAtt(c, imageDataList, emailData.userId, accountId, emailResult.emailId);
 		}
 
 		//Save regular attachments
@@ -523,11 +563,11 @@ const emailService = {
 			if (attachments.length > 10) {
 				throw new BizError(t('attLimit'));
 			}
-			await attService.saveSendAtt(c, attachments, userId, accountId, emailResult.emailId);
+			await attService.saveSendAtt(c, attachments, emailData.userId, accountId, emailResult.emailId);
 		}
 
-		const attList = await attService.selectByEmailIds(c, [emailResult.emailId]);
-		emailResult.attList = attList;
+		const attList = await attService.selectAllByEmailIds(c, [emailResult.emailId]);
+		emailResult.attList = attList.filter(item => item.type === attConst.type.ATT);
 
 		//Write directly to the database if all recipients are internal
 		if (allInternal) {
@@ -740,10 +780,10 @@ const emailService = {
 		}
 
 		// Combine exact and base address matches for the permission query
-		const allAccounts = [...accountList, ...baseAccounts];
+		const allAccounts = [...accountList, ...baseAccounts].filter(row => !row.shared || row.isDel === isDel.NORMAL);
 
 		//Look up recipient roles
-		const userIds = allAccounts.map(accountRow => accountRow.userId);
+		const userIds = allAccounts.filter(accountRow => !accountRow.shared).map(accountRow => accountRow.userId);
 		let roleList = await roleService.selectByUserIds(c, userIds);
 
 		//Prepare the records for saving to the database
@@ -771,17 +811,17 @@ const emailService = {
 			if (accountRow) {
 
 				//Set recipient details before saving
-				emailValues.userId = accountRow.userId;
+				emailValues.userId = accountRow.shared ? 0 : accountRow.userId;
 				emailValues.accountId = accountRow.accountId;
 				emailValues.type = emailConst.type.RECEIVE;
 				emailValues.status = emailConst.status.RECEIVE;
 
 				const roleRow = roleList.find(roleRow => roleRow.userId === accountRow.userId);
 
-				let { banEmail, availDomain } = roleRow;
+				let { banEmail, availDomain } = roleRow || {};
 
 				//Mark as bounced if the recipient lacks domain permission or blocks the sender
-				if (email !== c.env.admin) {
+				if (email !== c.env.admin && !accountRow.shared) {
 
 					if (!roleService.hasAvailDomainPerm(availDomain, email)) {
 						emailValues.status = emailConst.status.BOUNCED;
@@ -804,9 +844,11 @@ const emailService = {
 				emailValues.status = emailConst.status.NOONE;
 
 				//Mark as bounced when accepting mail without a recipient is disabled
-				if (noRecipient === settingConst.noRecipient.CLOSE) {
+				const archived = [...accountList, ...baseAccounts].some(row => row.shared && row.isDel === isDel.DELETE &&
+					(row.email === email || row.email === emailUtils.getBaseEmail(email)));
+				if (archived || noRecipient === settingConst.noRecipient.CLOSE) {
 					emailValues.status = emailConst.status.BOUNCED;
-					emailValues.message = `Recipient not found: <${email}>`;
+					emailValues.message = archived ? `Recipient disabled: <${email}>` : `Recipient not found: <${email}>`;
 				}
 
 				emailDataList.push(emailValues);
@@ -820,11 +862,17 @@ const emailService = {
 
 		for (const emailData of receiveEmailList) {
 
+			const recipientAttachments = [];
+			for (const attRow of attList) {
+				const attValues = { ...attRow };
+				attValues.key = await attService.copyForAccount(c, attRow, emailData.accountId, emailData.userId);
+				emailData.content = emailData.content?.replaceAll(attRow.key, attValues.key);
+				recipientAttachments.push(attValues);
+			}
 			const emailRow = await orm(c).insert(email).values(emailData).returning().get();
 
 			//Set attachment details before saving
-			for (const attRow of attList) {
-				const attValues = {...attRow};
+			for (const attValues of recipientAttachments) {
 				attValues.emailId = emailRow.emailId;
 				attValues.accountId = emailRow.accountId;
 				attValues.userId = emailRow.userId;
@@ -904,9 +952,12 @@ const emailService = {
 		let { emailId, accountId, allReceive } = params;
 		allReceive = Number(allReceive);
 
-		if (isNaN(allReceive)) {
-			let accountRow = await accountService.selectById(c, accountId);
-			allReceive = accountRow.allReceive;
+		const accountRow = await accountService.selectById(c, accountId);
+		if (isNaN(allReceive)) allReceive = accountRow?.allReceive || 0;
+		const shared = accountRow?.shared === 1;
+		if (shared) {
+			await sharedMailboxService.requireAccess(c, accountId, userId);
+			allReceive = 0;
 		}
 
 		const list = await orm(c).select({ ...emailListColumns }).from(email)
@@ -917,7 +968,7 @@ const emailService = {
 			.where(
 				and(
 					gt(email.emailId, emailId),
-					eq(email.userId, userId),
+					eq(email.userId, shared ? 0 : userId),
 					eq(email.isDel, isDel.NORMAL),
 					eq(account.isDel, isDel.NORMAL),
 					allReceive ? undefined : eq(email.accountId, accountId),
@@ -1001,6 +1052,11 @@ const emailService = {
 
 		const filters = this.allEmailListFilters({ emailId, name, subject, accountEmail, userEmail, type, timeSort });
 		const countFilters = this.allEmailListFilters({ emailId, name, subject, accountEmail, userEmail, type, timeSort, withCursor: false });
+		const sharedFilter = await this.allEmailSharedFilter(c);
+		if (sharedFilter) {
+			filters.push(sharedFilter);
+			countFilters.push(sharedFilter);
+		}
 		const columns = full ? emailListColumns : emailBriefColumns;
 
 		const query = orm(c).select({ ...columns, userEmail: user.email })
@@ -1031,7 +1087,7 @@ const emailService = {
 			accountId: email.accountId,
 			userId: email.userId,
 		}).from(email)
-			.where(eq(email.type, emailConst.type.RECEIVE))
+			.where(and(eq(email.type, emailConst.type.RECEIVE), sharedFilter))
 			.orderBy(desc(email.emailId)).limit(1).get();
 
 		let [list, totalRow, latestEmail] = await Promise.all([listQuery, totalQuery, latestEmailQuery]);
@@ -1056,13 +1112,15 @@ const emailService = {
 	async allEmailLatest(c, params) {
 
 		const { emailId } = params;
+		const sharedFilter = await this.allEmailSharedFilter(c);
 
 		let list = await orm(c).select({ ...emailListColumns, userEmail: user.email }).from(email)
 			.leftJoin(user, eq(email.userId, user.userId))
 			.where(
 				and(
 					gt(email.emailId, emailId),
-					eq(email.type, emailConst.type.RECEIVE)
+					eq(email.type, emailConst.type.RECEIVE),
+					sharedFilter
 				))
 			.orderBy(desc(email.emailId))
 			.limit(20);
@@ -1072,6 +1130,14 @@ const emailService = {
 			item.listText = this.toListText(item);
 		}
 		return list;
+	},
+
+	async allEmailSharedFilter(c) {
+		if (c.get('user').email === c.env.admin) return undefined;
+		const rows = await sharedMailboxService.listForUser(c, c.get('user').userId);
+		const accountIds = rows.map(row => row.accountId);
+		return or(sql`NOT EXISTS (SELECT 1 FROM account a WHERE a.account_id = ${email.accountId} AND a.shared = 1)`,
+			accountIds.length ? inArray(email.accountId, accountIds) : undefined);
 	},
 
 	async emailAddAtt(c, list) {
@@ -1207,6 +1273,7 @@ const emailService = {
 		if (emailIds.length === 0){
 			return;
 		}
+		await this.requireSharedOperations(c, emailIds, c.get('user').userId);
 
 		await attService.removeByEmailIds(c, emailIds);
 
@@ -1220,7 +1287,9 @@ const emailService = {
 
 	async read(c, params, userId) {
 		const { emailIds } = params;
-		await orm(c).update(email).set({ unread: emailConst.unread.READ }).where(and(eq(email.userId, userId), inArray(email.emailId, emailIds)));
+		const ids = emailIds.map(Number);
+		await this.requireEmailAccess(c, ids, userId);
+		await orm(c).update(email).set({ unread: emailConst.unread.READ }).where(inArray(email.emailId, ids));
 	}
 };
 

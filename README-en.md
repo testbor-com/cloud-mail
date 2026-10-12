@@ -69,6 +69,12 @@ With only one domain, you can create multiple different email addresses, similar
 
 - **📜 More Features**: Under development...
 
+## Shared mailboxes
+
+After deploying an update, run the existing `/api/init/<jwt_secret>` initialization route to add the shared mailbox tables and encryption key. Preserve the `shared_mailbox_key` row when backing up D1; it is needed to read stored shared attachments.
+
+The administrator can open **Shared Mailboxes** to create an address on a configured domain, grant access by user email, revoke access, and archive or restore the address. Members select a shared address in the mailbox panel to read incoming mail, send as that address, and manage its messages. Shared attachments are encrypted in storage and downloaded through an authenticated Worker endpoint.
+
 ## Tech Stack
 
 - **Platform**: [Cloudflare Workers](https://developers.cloudflare.com/workers/)
