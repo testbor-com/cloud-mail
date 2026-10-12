@@ -1,9 +1,9 @@
 <p align="center">
     <img src="doc/demo/logo.png" width="80px" />
     <h1 align="center">Cloud Mail</h1>
-    <p align="center">A simple, responsive email service designed to run on Cloudflare Workers 🎉</p> 
+    <p align="center">A simple, responsive email service on Cloudflare Workers, with email sending and attachment support 🎉</p>
     <p align="center">
-       <a href="/README.md" style="margin-left: 5px">简体中文</a> | English 
+        English | <a href="/README-zh.md" style="margin-left: 5px">简体中文</a>
     </p>
     <p align="center">
         <a href="https://github.com/maillab/cloud-mail/tree/main?tab=MIT-1-ov-file" target="_blank" >
@@ -30,7 +30,9 @@
 </p>
 
 ## Description
+
 With only one domain, you can create multiple different email addresses, similar to major email platforms. This project can be deployed on Cloudflare Workers to reduce server costs and build your own email service.
+
 ## Project Showcase
 
 - [Live Demo](https://skymail.ink)<br>
@@ -47,7 +49,7 @@ With only one domain, you can create multiple different email addresses, similar
 
 - **💻 Responsive Design**: Automatically adapts to both desktop and most mobile browsers.
 
-- **📧 Email Sending**: Integrated with Resend, supporting bulk email sending and attachments.
+- **📧 Email Sending**: Integrated with Resend for bulk sending, embedded images, attachments, and delivery status.
 
 - **🛡️ Admin Features**: Admin controls for user and email management with RBAC-based access control.
 
@@ -55,9 +57,9 @@ With only one domain, you can create multiple different email addresses, similar
 
 - **🔔 Email Push**: Forward received emails to Telegram bots or other email providers.
 
-- **📡 Open API**: Supports batch user creation via API and multi-condition email queries
+- **📡 Open API**: Supports batch user creation and email queries with multiple filters.
 
-- **🔢 Verification Code Recognition**: Auto-detect codes via Workers AI
+- **🔢 Verification Code Recognition**: Automatically recognizes email verification codes with Workers AI.
 
 - **📈 Data Visualization**: Use ECharts to visualize system data, including user email growth.
 
@@ -125,11 +127,11 @@ cloud-mail
 │   │   ├── store			    # Global state management
 │   │   ├── utils			    # Utility functions
 │   │   ├── views			    # Page components
-│   │   ├── app.vue			    # Root component
+│   │   ├── App.vue			    # Root component
 │   │   ├── main.js			    # Entry JS file
 │   │   └── style.css			# Global styles
 │   ├── package.json			# Project dependencies
-└── └── env.release				# Environment configuration
+│   └── .env.release			# Environment configuration
 
 ```
 
