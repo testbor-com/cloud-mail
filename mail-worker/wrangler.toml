@@ -6,21 +6,25 @@ keep_vars = true
 [observability]
 enabled = true
 
-#[[d1_databases]]
-#binding = "db"			#D1 database binding name; do not change the default
-#database_name = ""		#D1 database name
-#database_id = ""		#D1 database ID
+[[routes]]
+pattern = "mail.ziyoly.com"
+custom_domain = true
 
-#[[kv_namespaces]]
-#binding = "kv"			#KV binding name; do not change the default
-#id = ""					#KV database ID
+[[d1_databases]]
+binding = "db"
+database_name = "cloud-mail"
+database_id = "f8def8e9-acfc-4bde-a25f-24e025213010"
 
-#[[r2_buckets]]
-#binding = "r2"			#R2 storage binding name; do not change the default
-#bucket_name = ""		#R2 bucket name
+[[kv_namespaces]]
+binding = "kv"
+id = "8c000e9e8fba4b19a3d513e89d8cb0a4"
 
-#[[send_email]]
-#name = "email"			#Cloudflare email sending; preferred when configured
+[[r2_buckets]]
+binding = "r2"
+bucket_name = "cloud-mail-attachments"
+
+[[send_email]]
+name = "email"
 
 [ai]
 binding = "ai"
@@ -39,8 +43,8 @@ crons = ["0 * * * *"]	#Run hourly; resetDaySendCount takes effect only at 00:00 
 #ai_model = ""			#AI model; defaults to @cf/meta/llama-3.1-8b-instruct-fast when empty
 #analysis_cache = false			#Whether to enable analytics data caching
 #orm_log = false			#Whether to log SQL
-#domain = []				#Multiple mail domains can be configured; example: ["example1.com","example2.com"]
-#admin = ""					#Administrator email; example: admin@example.com
+domain = ["ziyoly.com"]
+admin = "admin@ziyoly.com"
 #jwt_secret = ""			#JWT secret; enter any string
 
 [build]
