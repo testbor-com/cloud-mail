@@ -16,36 +16,36 @@
         <div class="email-title">
           {{ email.subject }}
         </div>
-        <div class="content">
+        <div class="content" v-for="item in displayThread" :key="item.emailId">
           <div class="email-info">
             <div>
               <div class="send"><span class="send-source">{{$t('from')}}</span>
                 <div class="send-name">
-                  <span class="send-name-title">{{ email.name }}</span>
-                  <span><{{ email.sendEmail }}></span>
+                  <span class="send-name-title">{{ item.name }}</span>
+                  <span><{{ item.sendEmail }}></span>
                 </div>
               </div>
-              <div class="receive"><span class="source">{{$t('recipient')}}</span><span class="receive-email">{{  formateReceive(email.recipient) }}</span></div>
+              <div class="receive"><span class="source">{{$t('recipient')}}</span><span class="receive-email">{{  formateReceive(item.recipient) }}</span></div>
               <div class="date">
-                <div>{{ formatDetailDate(email.createTime) }}</div>
+                <div>{{ formatDetailDate(item.createTime) }}</div>
               </div>
             </div>
-            <el-alert v-if="email.status === 3" :closable="false" :title="toMessage(email.message)" class="email-msg" type="error" show-icon />
-            <el-alert v-if="email.status === 4" :closable="false" :title="$t('complained')" class="email-msg" type="warning" show-icon />
-            <el-alert v-if="email.status === 5" :closable="false" :title="$t('delayed')" class="email-msg" type="warning" show-icon />
+            <el-alert v-if="item.status === 3" :closable="false" :title="toMessage(item.message)" class="email-msg" type="error" show-icon />
+            <el-alert v-if="item.status === 4" :closable="false" :title="$t('complained')" class="email-msg" type="warning" show-icon />
+            <el-alert v-if="item.status === 5" :closable="false" :title="$t('delayed')" class="email-msg" type="warning" show-icon />
           </div>
-          <el-scrollbar class="htm-scrollbar" :class="!email.attList?.length ? 'bottom-distance' : ''">
-            <ShadowHtml class="shadow-html" :html="formatImage(email.content)" v-if="email.content" />
-            <pre v-else class="email-text" >{{email.text}}</pre>
+          <el-scrollbar class="htm-scrollbar" :class="!item.attList?.length ? 'bottom-distance' : ''">
+            <ShadowHtml class="shadow-html" :html="formatImage(item.content)" v-if="item.content" />
+            <pre v-else class="email-text" >{{item.text}}</pre>
           </el-scrollbar>
-          <div class="att" v-if="email.attList?.length > 0">
+          <div class="att" v-if="item.attList?.length > 0">
             <div class="att-title">
               <span>{{$t('attachments')}}</span>
-              <span>{{$t('attCount',{total: email.attList.length})}}</span>
+              <span>{{$t('attCount',{total: item.attList.length})}}</span>
             </div>
             <div class="att-box">
 
-              <div class="att-item" v-for="att in email.attList" :key="att.attId">
+              <div class="att-item" v-for="att in item.attList" :key="att.attId">
                 <div class="att-icon" @click="showImage(att.key)">
                   <Icon v-bind="getIconByName(att.filename)" />
                 </div>
@@ -78,7 +78,7 @@ import ShadowHtml from '@/components/shadow-html/index.vue'
 import {computed, reactive, ref, watch, onMounted, onUnmounted} from "vue";
 import {useRouter} from 'vue-router'
 import {ElMessage, ElMessageBox} from 'element-plus'
-import {emailDelete, emailRead} from "@/request/email.js";
+import {emailDelete, emailRead, emailThread} from "@/request/email.js";
 import {Icon} from "@iconify/vue";
 import {useEmailStore} from "@/store/email.js";
 import {useAccountStore} from "@/store/account.js";
@@ -89,6 +89,7 @@ import {cvtR2Url,toOssDomain} from "@/utils/convert.js";
 import {getIconByName} from "@/utils/icon-utils.js";
 import {useSettingStore} from "@/store/setting.js";
 import {allEmailDelete} from "@/request/all-email.js";
+import {allEmailThread} from "@/request/all-email.js";
 import {useUiStore} from "@/store/ui.js";
 import {useI18n} from "vue-i18n";
 import {EmailUnreadEnum} from "@/enums/email-enum.js";
@@ -105,6 +106,8 @@ const email = computed(() => emailStore.contentData.email || {
   text: '',
   recipient: '[]',
 })
+const thread = ref([])
+const displayThread = computed(() => thread.value.length ? thread.value : [email.value])
 const showPreview = ref(false)
 const srcList = reactive([])
 
@@ -114,26 +117,43 @@ watch(() => accountStore.currentAccountId, () => {
 })
 
 let readRequesting = false
+let threadRequest = 0
+
+watch(() => email.value.emailId, async (emailId) => {
+  const request = ++threadRequest
+  thread.value = []
+  if (!emailId) return
+  const load = emailStore.contentData.delType === 'physics' ? allEmailThread : emailThread
+  try {
+    const list = await load(emailId)
+    if (request !== threadRequest) return
+    emailStore.applyFullList(list)
+    thread.value = list
+    tryMarkRead()
+  } catch (e) {
+    if (request === threadRequest) thread.value = []
+  }
+}, { immediate: true })
 
 function tryMarkRead() {
-  if (!emailStore.contentData.showUnread || readRequesting) return
-  const current = email.value
-  if (!current?.emailId || current.unread !== EmailUnreadEnum.UNREAD) return
-
-  // Mark as read once detail data is ready (detailMap is populated or the body has content)
-  const full = emailStore.detailMap[current.emailId]
-  const detailReady = !!full || !!(current.content || current.text)
-  if (!detailReady) return
+  if (!emailStore.contentData.showUnread || emailStore.contentData.delType === 'physics' || readRequesting) return
+  const unread = displayThread.value.filter(current => current?.emailId && current.type === 0 &&
+    current.unread === EmailUnreadEnum.UNREAD &&
+    (emailStore.detailMap[current.emailId] || current.content || current.text))
+  if (!unread.length) return
 
   readRequesting = true
-  const emailId = current.emailId
-  current.unread = EmailUnreadEnum.READ
-  if (emailStore.detailMap[emailId]) {
-    emailStore.detailMap[emailId].unread = EmailUnreadEnum.READ
+  const emailIds = unread.map(current => current.emailId)
+  for (const current of unread) {
+    current.unread = EmailUnreadEnum.READ
+    if (emailStore.detailMap[current.emailId]) {
+      emailStore.detailMap[current.emailId].unread = EmailUnreadEnum.READ
+    }
+    emailStore.markListRead(current.emailId)
   }
-  emailStore.markListRead(emailId)
-  emailRead([emailId]).finally(() => {
+  emailRead(emailIds).finally(() => {
     readRequesting = false
+    tryMarkRead()
   })
 }
 
@@ -154,6 +174,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  threadRequest++
   emailStore.contentData.showUnread = false;
   readRequesting = false
   window.removeEventListener('keydown', handleKeyDown);
@@ -317,6 +338,8 @@ const handleDelete = () => {
   .content {
     display: flex;
     flex-direction: column;
+    border-bottom: 1px solid var(--light-border-color);
+    margin-bottom: 20px;
 
     .att {
       margin-top: 30px;

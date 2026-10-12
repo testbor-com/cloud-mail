@@ -171,6 +171,76 @@ const emailService = {
 		return conditions;
 	},
 
+	async thread(c, params, userId, admin = false) {
+		const emailId = Number(params.emailId);
+		if (!Number.isSafeInteger(emailId) || emailId < 1) {
+			throw new BizError(t('notExistEmail'), 404);
+		}
+
+		const selected = await orm(c).select().from(email).where(and(
+			eq(email.emailId, emailId),
+			admin ? undefined : eq(email.userId, userId),
+			admin ? undefined : eq(email.isDel, isDel.NORMAL)
+		)).get();
+		if (!selected) {
+			throw new BizError(t('notExistEmail'), 404);
+		}
+
+		const ownerId = selected.userId;
+		const messages = new Map([[selected.emailId, selected]]);
+		const searched = new Set();
+		const pending = new Set([
+			selected.messageId,
+			selected.inReplyTo,
+			...this.messageReferences(selected.relation)
+		].filter(Boolean));
+
+		while (pending.size) {
+			const ids = [...pending].slice(0, 50);
+			ids.forEach(id => {
+				pending.delete(id);
+				searched.add(id);
+			});
+			const rows = await orm(c).select().from(email).where(and(
+				eq(email.userId, ownerId),
+				admin ? undefined : eq(email.isDel, isDel.NORMAL),
+				or(
+					inArray(email.messageId, ids),
+					inArray(email.inReplyTo, ids),
+					...ids.map(id => sql`instr(${email.relation}, ${id}) > 0`)
+				)
+			)).all();
+
+			for (const row of rows) {
+				if (messages.has(row.emailId)) continue;
+				const references = this.messageReferences(row.relation);
+				if (!ids.includes(row.messageId) && !ids.includes(row.inReplyTo) &&
+					!references.some(id => ids.includes(id))) continue;
+				messages.set(row.emailId, row);
+				for (const id of [row.messageId, row.inReplyTo, ...references]) {
+					if (id && !searched.has(id)) pending.add(id);
+				}
+			}
+		}
+
+		const list = [...messages.values()].sort((a, b) =>
+			a.createTime.localeCompare(b.createTime) || a.emailId - b.emailId);
+		await this.emailAddAtt(c, list);
+		if (!admin) {
+			const stars = await orm(c).select({ emailId: star.emailId }).from(star)
+				.where(and(eq(star.userId, userId), inArray(star.emailId, [...messages.keys()]))).all();
+			const starred = new Set(stars.map(item => item.emailId));
+			list.forEach(item => item.isStar = starred.has(item.emailId) ? 1 : 0);
+		}
+		return list;
+	},
+
+	messageReferences(value) {
+		if (!value) return [];
+		const references = String(value).match(/<[^>]+>/g);
+		return references || String(value).split(/\s+/).filter(Boolean);
+	},
+
 	allEmailListFilters({ emailId, name, subject, accountEmail, userEmail, type, timeSort, withCursor = true }) {
 		const conditions = [];
 
@@ -343,15 +413,17 @@ const emailService = {
 		let emailRow = {
 			messageId: null
 		};
+		let references = '';
 
 		//If this is a reply
 		if (sendType === 'reply') {
 
 			emailRow = await this.selectById(c, emailId);
 
-			if (!emailRow) {
+			if (!emailRow || emailRow.userId !== userId) {
 				throw new BizError(t('notExistEmailReply'));
 			}
+			references = [emailRow.relation, emailRow.messageId].filter(Boolean).join(' ');
 
 		}
 
@@ -370,7 +442,8 @@ const emailService = {
 					html,
 					attachments: [...imageDataList, ...attachments],
 					sendType,
-					messageId: emailRow.messageId
+					messageId: emailRow.messageId,
+					references
 				});
 			} else {
 				sendResult = await this.sendByResend(resendToken, {
@@ -382,7 +455,8 @@ const emailService = {
 					html,
 					attachments: [...imageDataList, ...attachments],
 					sendType,
-					messageId: emailRow.messageId
+					messageId: emailRow.messageId,
+					references
 				});
 			}
 
@@ -412,6 +486,8 @@ const emailService = {
 		emailData.type = emailConst.type.SEND;
 		emailData.userId = userId;
 		emailData.resendEmailId = data?.id;
+		emailData.messageId = allInternal ? `<${crypto.randomUUID()}@${domain}>` :
+			(useCloudflareEmail ? data?.id : data?.message_id) || '';
 
 		const recipient = [];
 
@@ -423,7 +499,7 @@ const emailService = {
 
 		if (sendType === 'reply') {
 			emailData.inReplyTo = emailRow.messageId;
-			emailData.relation = emailRow.messageId;
+			emailData.relation = references;
 		}
 
 		//Increment the user send count when the role has a send limit
@@ -495,7 +571,7 @@ const emailService = {
 		if (params.sendType === 'reply' && params.messageId) {
 			sendForm.headers = {
 				'in-reply-to': params.messageId,
-				'references': params.messageId
+				'references': params.references
 			};
 		}
 
@@ -520,10 +596,10 @@ const emailService = {
 			attachments: await this.toResendAttachments(params.attachments)
 		};
 
-		if (params.sendType === 'reply') {
+		if (params.sendType === 'reply' && params.messageId) {
 			sendForm.headers = {
 				'in-reply-to': params.messageId,
-				'references': params.messageId
+				'references': params.references
 			};
 		}
 
@@ -871,10 +947,11 @@ const emailService = {
 	},
 
 	updateEmailStatus(c, params) {
-		const { status, resendEmailId, message } = params;
+		const { status, resendEmailId, message, messageId } = params;
 		return orm(c).update(email).set({
 			status: status,
-			message: message
+			message: message,
+			...(messageId ? { messageId } : {})
 		}).where(eq(email.resendEmailId, resendEmailId)).returning().get();
 	},
 
