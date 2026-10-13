@@ -1,6 +1,6 @@
 <p align="center">
     <img src="doc/demo/logo.png" width="80px" />
-    <h1 align="center">Cloud Mail</h1>
+    <h1 align="center">Ziyoly Mail</h1>
     <p align="center">A simple, responsive email service on Cloudflare Workers, with email sending and attachment support 🎉</p>
     <p align="center">
         English | <a href="/README-zh.md" style="margin-left: 5px">Chinese</a>
